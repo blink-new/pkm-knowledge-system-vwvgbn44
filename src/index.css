@@ -84,3 +84,45 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  /* Search highlighting */
+  mark {
+    @apply bg-yellow-200 text-yellow-900 px-1 py-0.5 rounded-sm;
+  }
+  
+  .dark mark {
+    @apply bg-yellow-800 text-yellow-100;
+  }
+
+  /* SQL Search Bar Styles */
+  .sql-suggestion-field {
+    @apply border-blue-500 text-blue-600;
+  }
+  
+  .sql-suggestion-operator {
+    @apply border-green-500 text-green-600;
+  }
+  
+  .sql-suggestion-function {
+    @apply border-purple-500 text-purple-600;
+  }
+  
+  .sql-suggestion-value {
+    @apply border-orange-500 text-orange-600;
+  }
+
+  /* Content grid animations */
+  .content-card {
+    @apply transition-all duration-200 ease-in-out;
+  }
+  
+  .content-card:hover {
+    @apply shadow-lg scale-[1.02];
+  }
+
+  /* Theme transition */
+  * {
+    @apply transition-colors duration-200;
+  }
+}

@@ -1,20 +1,36 @@
 import { useState } from 'react'
-import { MoreHorizontal, FileText, Image, Video, Link, StickyNote, Calendar, Tag, ExternalLink } from 'lucide-react'
+import { MoreHorizontal, FileText, Image, Video, Link, StickyNote, Calendar, Tag, ExternalLink, Grid, List } from 'lucide-react'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { ContentItem } from '@/types'
+import { ContentItem, SearchFilters } from '@/types'
+import { SearchParser } from '@/lib/searchParser'
+import { AdvancedFilters } from '@/components/search/AdvancedFilters'
 
 interface ContentGridProps {
   items: ContentItem[]
   onItemClick?: (item: ContentItem) => void
   onItemEdit?: (item: ContentItem) => void
   onItemDelete?: (item: ContentItem) => void
+  searchQuery?: string
+  filters?: SearchFilters
+  onFiltersChange?: (filters: SearchFilters) => void
+  onSortChange?: (sort: { field: string; direction: 'asc' | 'desc' }) => void
 }
 
-export function ContentGrid({ items, onItemClick, onItemEdit, onItemDelete }: ContentGridProps) {
+export function ContentGrid({ 
+  items, 
+  onItemClick, 
+  onItemEdit, 
+  onItemDelete, 
+  searchQuery,
+  filters = {},
+  onFiltersChange,
+  onSortChange
+}: ContentGridProps) {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [currentSort, setCurrentSort] = useState({ field: 'updatedAt', direction: 'desc' as 'asc' | 'desc' })
 
   const getContentIcon = (type: string) => {
     switch (type) {
@@ -63,6 +79,24 @@ export function ContentGrid({ items, onItemClick, onItemEdit, onItemDelete }: Co
     })
   }
 
+  const highlightText = (text: string) => {
+    if (!searchQuery) return text
+    const highlighted = SearchParser.highlight(text, searchQuery)
+    return <span dangerouslySetInnerHTML={{ __html: highlighted }} />
+  }
+
+  const handleSortChange = (sort: { field: string; direction: 'asc' | 'desc' }) => {
+    setCurrentSort(sort)
+    onSortChange?.(sort)
+  }
+
+  const handleFiltersChange = (newFilters: SearchFilters) => {
+    onFiltersChange?.(newFilters)
+  }
+
+  // Get available tags from all items
+  const availableTags = [...new Set(items.flatMap(item => item.tags))]
+
   if (items.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -87,12 +121,31 @@ export function ContentGrid({ items, onItemClick, onItemEdit, onItemDelete }: Co
           <p className="text-muted-foreground">{items.length} items in your knowledge base</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            Sort by Date
-          </Button>
-          <Button variant="outline" size="sm">
-            Filter
-          </Button>
+          <AdvancedFilters
+            filters={filters}
+            onFiltersChange={handleFiltersChange}
+            onSortChange={handleSortChange}
+            currentSort={currentSort}
+            availableTags={availableTags}
+          />
+          <div className="flex items-center border rounded-md">
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('grid')}
+              className="rounded-r-none"
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('list')}
+              className="rounded-l-none"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -104,7 +157,7 @@ export function ContentGrid({ items, onItemClick, onItemEdit, onItemDelete }: Co
           return (
             <Card 
               key={item.id} 
-              className="cursor-pointer hover:shadow-md transition-shadow"
+              className="content-card cursor-pointer"
               onClick={() => onItemClick?.(item)}
             >
               <CardHeader className="pb-3">
@@ -137,7 +190,7 @@ export function ContentGrid({ items, onItemClick, onItemEdit, onItemDelete }: Co
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <h3 className="font-medium line-clamp-2">{item.title}</h3>
+                <h3 className="font-medium line-clamp-2">{highlightText(item.title)}</h3>
               </CardHeader>
               
               <CardContent className="pt-0">

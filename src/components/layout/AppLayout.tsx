@@ -1,19 +1,19 @@
 import { useState } from 'react'
-import { Search, Plus, FolderOpen, Settings, Database, FileText, Image, Video, Link, StickyNote } from 'lucide-react'
+import { Plus, FolderOpen, Settings, Database, FileText, Image, Video, Link, StickyNote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { SQLSearchBar } from '@/components/search/SQLSearchBar'
+import { ThemeToggle } from '@/components/theme/ThemeToggle'
 
 interface AppLayoutProps {
   children: React.ReactNode
-  onSearch?: (query: string) => void
+  onSearch?: (query: string, sqlQuery?: string) => void
   onFilterChange?: (filters: any) => void
 }
 
 export function AppLayout({ children, onSearch, onFilterChange }: AppLayoutProps) {
-  const [searchQuery, setSearchQuery] = useState('')
   const [activeFilter, setActiveFilter] = useState<string>('all')
 
   const contentTypes = [
@@ -31,9 +31,8 @@ export function AppLayout({ children, onSearch, onFilterChange }: AppLayoutProps
     { id: '3', name: 'Meeting Notes', color: '#059669', count: 0 },
   ]
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    onSearch?.(searchQuery)
+  const handleSearch = (query: string, sqlQuery?: string) => {
+    onSearch?.(query, sqlQuery)
   }
 
   const handleFilterClick = (filterId: string) => {
@@ -47,18 +46,16 @@ export function AppLayout({ children, onSearch, onFilterChange }: AppLayoutProps
       <div className="w-80 border-r bg-card flex flex-col">
         {/* Header */}
         <div className="p-6 border-b">
-          <h1 className="text-2xl font-bold text-foreground mb-4">Knowledge Base</h1>
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-foreground">Knowledge Base</h1>
+            <ThemeToggle />
+          </div>
           
-          {/* Search Bar */}
-          <form onSubmit={handleSearch} className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search your knowledge..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
-          </form>
+          {/* SQL Search Bar */}
+          <SQLSearchBar 
+            onSearch={handleSearch}
+            placeholder="Search with SQL-like queries... (e.g., type:document AND tags:react)"
+          />
         </div>
 
         <ScrollArea className="flex-1">

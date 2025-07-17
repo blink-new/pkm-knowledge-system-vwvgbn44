@@ -2,11 +2,15 @@ import { useState, useEffect } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { ContentGrid } from '@/components/content/ContentGrid'
 import { AddContentDialog } from '@/components/content/AddContentDialog'
+import { ContentPreviewModal } from '@/components/content/ContentPreviewModal'
+import { SearchResults } from '@/components/search/SearchResults'
+import { ThemeProvider } from '@/components/theme/ThemeProvider'
 import { blink } from '@/blink/client'
-import { ContentItem } from '@/types'
+import { ContentItem, SearchFilters } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { SearchParser } from '@/lib/searchParser'
 
 // Mock data for demonstration
 const mockItems: ContentItem[] = [
@@ -71,7 +75,11 @@ function App() {
   const [contentItems, setContentItems] = useState<ContentItem[]>([])
   const [filteredItems, setFilteredItems] = useState<ContentItem[]>([])
   const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [previewItem, setPreviewItem] = useState<ContentItem | null>(null)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [filters, setFilters] = useState<SearchFilters>({})
+  const [sortConfig, setSortConfig] = useState({ field: 'updatedAt', direction: 'desc' as 'asc' | 'desc' })
 
   useEffect(() => {
     const unsubscribe = blink.auth.onAuthStateChanged((state) => {
@@ -90,21 +98,81 @@ function App() {
   }, [user])
 
   useEffect(() => {
-    // Filter items based on search query
+    let filtered = [...contentItems]
+
+    // Apply search query
     if (searchQuery.trim()) {
-      const filtered = contentItems.filter(item =>
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.content?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+      const parsedQuery = SearchParser.parse(searchQuery)
+      filtered = SearchParser.filter(filtered, parsedQuery)
+    }
+
+    // Apply filters
+    if (filters.contentType?.length) {
+      filtered = filtered.filter(item => filters.contentType!.includes(item.contentType))
+    }
+
+    if (filters.tags?.length) {
+      filtered = filtered.filter(item => 
+        filters.tags!.some(filterTag => 
+          item.tags.some(itemTag => itemTag.toLowerCase().includes(filterTag.toLowerCase()))
+        )
       )
+    }
+
+    if (filters.dateRange?.start) {
+      const startDate = new Date(filters.dateRange.start)
+      filtered = filtered.filter(item => new Date(item.createdAt) >= startDate)
+    }
+
+    if (filters.dateRange?.end) {
+      const endDate = new Date(filters.dateRange.end)
+      filtered = filtered.filter(item => new Date(item.createdAt) <= endDate)
+    }
+
+    // Apply sorting
+    filtered.sort((a, b) => {
+      let aValue: any = a[sortConfig.field as keyof ContentItem]
+      let bValue: any = b[sortConfig.field as keyof ContentItem]
+
+      // Handle date fields
+      if (sortConfig.field === 'createdAt' || sortConfig.field === 'updatedAt') {
+        aValue = new Date(aValue).getTime()
+        bValue = new Date(bValue).getTime()
+      }
+
+      // Handle string fields
+      if (typeof aValue === 'string' && typeof bValue === 'string') {
+        aValue = aValue.toLowerCase()
+        bValue = bValue.toLowerCase()
+      }
+
+      if (sortConfig.direction === 'asc') {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
+    })
+
+    setFilteredItems(filtered)
+  }, [searchQuery, contentItems, filters, sortConfig])
+
+  const handleSearch = (query: string, sqlQuery?: string) => {
+    setSearchQuery(query)
+    
+    if (query.trim()) {
+      // Parse and execute SQL-like query
+      const parsedQuery = SearchParser.parse(query)
+      const filtered = SearchParser.filter(contentItems, parsedQuery)
       setFilteredItems(filtered)
+      
+      // Show query info
+      if (sqlQuery) {
+        console.log('SQL Query:', sqlQuery)
+        toast.success(`Found ${filtered.length} items matching your query`)
+      }
     } else {
       setFilteredItems(contentItems)
     }
-  }, [searchQuery, contentItems])
-
-  const handleSearch = (query: string) => {
-    setSearchQuery(query)
   }
 
   const handleFilterChange = (filters: any) => {
@@ -155,8 +223,8 @@ function App() {
   }
 
   const handleItemClick = (item: ContentItem) => {
-    // TODO: Open content preview modal
-    console.log('Item clicked:', item)
+    setPreviewItem(item)
+    setPreviewOpen(true)
   }
 
   const handleItemEdit = (item: ContentItem) => {
@@ -168,6 +236,14 @@ function App() {
     // TODO: Confirm and delete item
     setContentItems(prev => prev.filter(i => i.id !== item.id))
     toast.success('Content deleted')
+  }
+
+  const handleFiltersChange = (newFilters: SearchFilters) => {
+    setFilters(newFilters)
+  }
+
+  const handleSortChange = (sort: { field: string; direction: 'asc' | 'desc' }) => {
+    setSortConfig(sort)
   }
 
   if (loading) {
@@ -196,42 +272,68 @@ function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <AppLayout onSearch={handleSearch} onFilterChange={handleFilterChange}>
-        <div className="flex-1 flex flex-col">
-          {/* Header with Add Button */}
-          <div className="border-b bg-card px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-semibold">Welcome back, {user.email}</h1>
-                <p className="text-sm text-muted-foreground">
-                  Manage your knowledge base and find information quickly
-                </p>
+    <ThemeProvider defaultTheme="system" storageKey="pkm-theme">
+      <div className="min-h-screen bg-background">
+        <AppLayout onSearch={handleSearch} onFilterChange={handleFilterChange}>
+          <div className="flex-1 flex flex-col">
+            {/* Header with Add Button */}
+            <div className="border-b bg-card px-6 py-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-semibold">Welcome back, {user.email}</h1>
+                  <p className="text-sm text-muted-foreground">
+                    Manage your knowledge base and find information quickly
+                  </p>
+                </div>
+                <Button onClick={() => setAddDialogOpen(true)}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Content
+                </Button>
               </div>
-              <Button onClick={() => setAddDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Content
-              </Button>
             </div>
+
+            {/* Search Results Summary */}
+            {searchQuery && (
+              <div className="px-6 pt-4">
+                <SearchResults
+                  query={searchQuery}
+                  totalResults={filteredItems.length}
+                  onClearSearch={() => handleSearch('')}
+                />
+              </div>
+            )}
+
+            {/* Content Area */}
+            <ContentGrid
+              items={filteredItems}
+              onItemClick={handleItemClick}
+              onItemEdit={handleItemEdit}
+              onItemDelete={handleItemDelete}
+              searchQuery={searchQuery}
+              filters={filters}
+              onFiltersChange={handleFiltersChange}
+              onSortChange={handleSortChange}
+            />
           </div>
+        </AppLayout>
 
-          {/* Content Area */}
-          <ContentGrid
-            items={filteredItems}
-            onItemClick={handleItemClick}
-            onItemEdit={handleItemEdit}
-            onItemDelete={handleItemDelete}
-          />
-        </div>
-      </AppLayout>
+        {/* Add Content Dialog */}
+        <AddContentDialog
+          open={addDialogOpen}
+          onOpenChange={setAddDialogOpen}
+          onSubmit={handleAddContent}
+        />
 
-      {/* Add Content Dialog */}
-      <AddContentDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-        onSubmit={handleAddContent}
-      />
-    </div>
+        {/* Content Preview Modal */}
+        <ContentPreviewModal
+          item={previewItem}
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          onEdit={handleItemEdit}
+          onDelete={handleItemDelete}
+        />
+      </div>
+    </ThemeProvider>
   )
 }
 
